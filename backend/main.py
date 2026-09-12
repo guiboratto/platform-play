@@ -1,7 +1,11 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from typing import Dict
 import json
+import uvicorn
+from datetime import datetime
 
 app = FastAPI(title="Platform Play API")
 
@@ -12,6 +16,24 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Serve onboarding page
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    with open("public/onboarding.html", "r") as f:
+        return f.read()
+
+# Serve dashboard
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard():
+    with open("frontend/dist/index.html", "r") as f:
+        return f.read()
+
+# Serve static files
+app.mount("/static", StaticFiles(directory="public"), name="static")
 
 # In-memory storage (replace with PostgreSQL in production)
 users: Dict[int, dict] = {}
@@ -94,6 +116,47 @@ async def pause_agent():
     }
 
 
+@app.post("/api/install")
+async def install_platform(telegram_id: int, username: str, goal: str):
+    # Create user
+    user_id = len(users) + 1
+    users[user_id] = {
+        "id": user_id,
+        "telegram_id": telegram_id,
+        "username": username,
+        "goal": goal,
+        "created_at": datetime.now().isoformat(),
+    }
+
+    # Create agent
+    agents[user_id] = {
+        "id": user_id,
+        "user_id": user_id,
+        "status": "active",
+        "earnings": 0,
+        "clicks": 0,
+        "posts_today": 0,
+        "last_active": datetime.now().isoformat(),
+    }
+
+    # Add transaction
+    transactions.append({
+        "id": len(transactions) + 1,
+        "user_id": user_id,
+        "amount": 0,
+        "currency": "USD",
+        "source": "Installation",
+        "status": "paid",
+        "created_at": datetime.now().isoformat(),
+    })
+
+    return {
+        "user_id": user_id,
+        "goal": goal,
+        "status": "active",
+    }
+
+
 @app.get("/api/transactions")
 async def get_transactions(limit: int = 10):
     return transactions[-limit:]
@@ -128,5 +191,4 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

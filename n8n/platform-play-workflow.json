@@ -1,0 +1,179 @@
+{
+  "name": "Platform Play — AI Agent Content Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "return {\n  webhookUrl: 'https://your-platform-play.com/api/agent/generate-content',\n  userId: $('User Input').item.json.userId,\n  goal: $('User Input').item.json.goal,\n  products: $('Product Search').item.json.products\n};"
+      },
+      "id": "user-input",
+      "name": "User Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.qwen.alibaba.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"qwen-turbo\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a content generator for an affiliate marketing platform. Generate engaging content for \" + $('User Input').item.json.goal + \" with a focus on \" + $('Product Search').item.json.products.join(', ') + \". Use Ukrainian language, keep it short and engaging.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Generate a post about \" + $('User Input').item.json.goal + \" with these products: \" + $('Product Search').item.json.products.join(', ')\n    }\n  ],\n  \"max_tokens\": 500\n}"
+      },
+      "id": "ai-content-gen",
+      "name": "AI Content Generator",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.qwen.alibaba.com/v1/chat/completions",
+        "method": "POST",
+        "sendBody": true,
+        "jsonBody": "={\n  \"model\": \"qwen-turbo\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Generate image prompts for social media posts about \" + $('User Input').item.json.goal + \".\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Create 3 image prompts for \" + $('User Input').item.json.goal\n    }\n  ],\n  \"max_tokens\": 300\n}"
+      },
+      "id": "ai-image-prompts",
+      "name": "AI Image Prompts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [450, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "content-generated",
+              "leftValue": "={{ $json.choices[0].message.content }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isEmpty"
+              }
+            }
+          ],
+          "combinator": "all"
+        }
+      },
+      "id": "check-content",
+      "name": "Check Content Generated",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "resource": "pin",
+        "boardId": "={{ $('Board Selector').item.json.boardId }}",
+        "image": "={{ $('AI Content Generator').item.json.image || $('AI Image Prompts').item.json.image }}",
+        "title": "={{ $('AI Content Generator').item.json.title }}",
+        "description": "={{ $('AI Content Generator').item.json.description }}",
+        "link": "={{ $('Product Search').item.json.link }}",
+        "altText": "={{ $('AI Content Generator').item.json.altText }}"
+      },
+      "id": "create-pin",
+      "name": "Create Pin",
+      "type": "n8n-nodes-base.pin",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "operation": "post",
+        "platform": "threads",
+        "content": "={{ $('AI Content Generator').item.json.content }}"
+      },
+      "id": "post-threads",
+      "name": "Post to Threads",
+      "type": "n8n-nodes-base.socialMedia",
+      "typeVersion": 1,
+      "position": [850, 500]
+    },
+    {
+      "parameters": {
+        "operation": "post",
+        "platform": "tiktok",
+        "content": "={{ $('AI Content Generator').item.json.content }}"
+      },
+      "id": "post-tiktok",
+      "name": "Post to TikTok",
+      "type": "n8n-nodes-base.socialMedia",
+      "typeVersion": 1,
+      "position": [850, 700]
+    }
+  ],
+  "connections": {
+    "User Input": {
+      "main": [
+        [
+          {
+            "node": "AI Content Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Content Generator": {
+      "main": [
+        [
+          {
+            "node": "AI Image Prompts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Image Prompts": {
+      "main": [
+        [
+          {
+            "node": "Check Content Generated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Content Generated": {
+      "main": [
+        [
+          {
+            "node": "Create Pin",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Post to Threads",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Post to TikTok",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pin": {},
+  "socialMedia": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
